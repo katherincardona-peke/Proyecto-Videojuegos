@@ -1,4 +1,19 @@
 fileFormatVersion: 2
+guid: 4461f7385c8be0a47a6bf31a3276b439
+ModelImporter:
+  serializedVersion: 21300
+  internalIDToNameTable: []
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Rock_4_Mat
+    second: {fileID: 2100000, guid: f81fc3a4a3c656845b0d0a04e450322e, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Rock_Small_4_Mat
+    second: {fileID: 2100000, guid: f81fc3a4a3c656845b0d0a04e450322e, type: 2}
 guid: 772b51bf27fbca149b9145069553b9cf
 ModelImporter:
   serializedVersion: 24600
@@ -15,6 +30,10 @@ ModelImporter:
     bakeSimulation: 0
     resampleCurves: 1
     optimizeGameObjects: 0
+    removeConstantScaleCurves: 1
+    motionNodeName: 
+    rigImportErrors: 
+    rigImportWarnings: 
     removeConstantScaleCurves: 0
     motionNodeName: 
     animationImportErrors: 
@@ -114,3 +133,10 @@ ModelImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 379910
+  packageName: Terrain & Grass Pack
+  packageVersion: 1.0
+  assetPath: Assets/FlipGameDev/Terrain&GrassPack/Art/Meshes/Rocks_Small/Rock_Small_4.fbx
+  uploadId: 925568
