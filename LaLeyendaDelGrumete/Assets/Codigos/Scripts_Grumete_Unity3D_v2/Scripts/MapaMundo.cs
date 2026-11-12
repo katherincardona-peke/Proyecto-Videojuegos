@@ -144,7 +144,7 @@ public class MapaMundo : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.M) || Input.GetKeyDown(KeyCode.Escape)) { CerrarInterno(); return; }
             if (Input.GetKeyDown(KeyCode.Tab) && GameState.Kai) Cambiar(pestana == Pestana.Isla ? Pestana.Mundo : Pestana.Isla);
         }
-        ZoomYArrastre();
+        if (!animandoTinta) ZoomYArrastre();   // mientras la tinta anima, el mapa se mueve solo
         if (pestana == Pestana.Isla) RefrescarIconosLocal();
         else AnimarMundo();
     }
@@ -999,16 +999,35 @@ public class MapaMundo : MonoBehaviour
         }
     }
 
-    // la tinta revela las islas nuevas (solo la primera vez)
+    // la tinta revela las islas nuevas (solo la primera vez): el mapa se acerca a cada una,
+    // se disipa la niebla, la tinta dibuja la ruta y sale un cartel con su nombre.
+    // Tambien avisa cuando una isla ya revelada queda ABIERTA (ya cumples lo que pedia, por ejemplo al reclutar a Pico).
+    static bool RutaAbiertaAvisada(int id) => RecompensaIsla.Hechas.Contains("ruta:" + id);
+    static bool PuedeZarpar(Archipielago.Isla i) => i.id != 1 && i.Revelada && i.Disponible && i.Cumple;
+
     IEnumerator RevelarNuevas()
     {
         var nuevas = new List<VisualIsla>();
-        foreach (var v in visuales.Values) if (v.datos.Revelada && !GameState.IslaVista(v.datos.id)) nuevas.Add(v);
-        if (nuevas.Count == 0) yield break;
+        var abiertas = new List<VisualIsla>();
+        foreach (var v in visuales.Values)
+        {
+            if (v.datos.Revelada && !GameState.IslaVista(v.datos.id)) nuevas.Add(v);
+            else if (GameState.IslaVista(v.datos.id) && PuedeZarpar(v.datos) && !RutaAbiertaAvisada(v.datos.id) && v.datos.id > 2) abiertas.Add(v);
+        }
+        if (nuevas.Count == 0 && abiertas.Count == 0) yield break;
         animandoTinta = true;
-        GameState.Avisar("La Tinta de Marea reacciona a tus hazañas...", 3f);
+        if (nuevas.Count > 0) GameState.Avisar("La Tinta de Marea reacciona a tus hazañas...", 3f);
+        foreach (var v in abiertas)
+        {
+            RecompensaIsla.Hechas.Add("ruta:" + v.datos.id);
+            yield return Enfocar(PosMundo(v.datos), 1.6f, 0.7f);
+            Sonidos.Tocar("cofre", null, 0.7f, 0f, 0.3f);
+            yield return WaitReal(1.2f);   // se queda un momento mostrando la isla
+            elegida = v.datos.id; MostrarInfo(elegida);
+        }
         foreach (var v in nuevas)
         {
+            yield return Enfocar(PosMundo(v.datos), 1.7f, 0.8f);
             foreach (var d in v.ruta) d.gameObject.SetActive(false);
             for (float t = 0; t < 0.7f; t += Time.unscaledDeltaTime)   // se disipa la niebla
             {
@@ -1029,9 +1048,67 @@ public class MapaMundo : MonoBehaviour
                 yield return null;
             }
             elegida = v.datos.id; MostrarInfo(elegida);
-            GameState.Avisar("Nueva isla en el mapa: " + v.datos.nombre, 2.5f);
+            Sonidos.Tocar("nivel", null, 0.8f, 0f, 0.3f);
+            if (PuedeZarpar(v.datos)) RecompensaIsla.Hechas.Add("ruta:" + v.datos.id);
+            yield return WaitReal(1.5f);   // se queda un momento mostrando la isla nueva
         }
+        yield return Enfocar(Vector2.zero, 1f, 0.6f, true);   // vuelve a ver todo el archipielago
         animandoTinta = false;
+    }
+
+    // acerca el mapa del mundo a un punto (centrado en la parte visible) con un movimiento suave
+    IEnumerator Enfocar(Vector2 punto, float zoomMeta, float dur, bool volver = false)
+    {
+        var c = contenidoMundo;
+        Vector2 p0 = c.anchoredPosition; float z0 = zoom;
+        Vector2 p1 = volver ? Base() : Base() - punto * zoomMeta;
+        for (float t = 0f; t < dur; t += Time.unscaledDeltaTime)
+        {
+            float k = t / dur; k = k * k * (3f - 2f * k);
+            zoom = Mathf.Lerp(z0, zoomMeta, k);
+            c.localScale = Vector3.one * zoom;
+            c.anchoredPosition = Vector2.Lerp(p0, p1, k);
+            yield return null;
+        }
+        zoom = zoomMeta; c.localScale = Vector3.one * zoom; c.anchoredPosition = p1;
+    }
+
+    // cartel grande en el centro del mapa: titulo, nombre de la isla y una linea de detalle
+    RectTransform cartel; CanvasGroup grupoCartel; Text cartelTitulo, cartelNombre, cartelDetalle; Image cartelFranja;
+    IEnumerator Cartel(string titulo, string nombre, string detalle, Color color)
+    {
+        if (!cartel)
+        {
+            var fondo = Img(ventana, cuadro, new Color(tinta.r, tinta.g, tinta.b, 0.92f));
+            cartel = fondo.rectTransform;
+            Poner(cartel, new Vector2(.5f, .5f), new Vector2(-120f, 0f), new Vector2(760f, 230f));
+            grupoCartel = cartel.gameObject.AddComponent<CanvasGroup>(); grupoCartel.blocksRaycasts = false;
+            var borde = cartel.gameObject.AddComponent<Outline>(); borde.effectColor = dorado; borde.effectDistance = new Vector2(4, -4);
+            cartelFranja = Img(cartel, cuadro, color); Poner(cartelFranja.rectTransform, new Vector2(.5f, 1f), new Vector2(0, -6), new Vector2(740f, 8f));
+            cartelTitulo = Texto(cartel, "", 26, FontStyle.Bold, dorado, TextAnchor.MiddleCenter);
+            Poner(cartelTitulo.rectTransform, new Vector2(.5f, 1f), new Vector2(0, -38), new Vector2(720, 36));
+            cartelNombre = Texto(cartel, "", 54, FontStyle.Bold, papel, TextAnchor.MiddleCenter);
+            Poner(cartelNombre.rectTransform, new Vector2(.5f, 1f), new Vector2(0, -98), new Vector2(740, 70));
+            cartelNombre.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.8f);
+            cartelDetalle = Texto(cartel, "", 21, FontStyle.Italic, papel, TextAnchor.UpperCenter);
+            Poner(cartelDetalle.rectTransform, new Vector2(.5f, 1f), new Vector2(0, -146), new Vector2(700, 80));
+        }
+        cartel.SetAsLastSibling();
+        cartelTitulo.text = titulo; cartelNombre.text = nombre.ToUpper(); cartelDetalle.text = detalle; cartelFranja.color = color;
+        cartel.gameObject.SetActive(true);
+        for (float t = 0f; t < 0.3f; t += Time.unscaledDeltaTime)   // entra creciendo
+        {
+            float k = t / 0.3f;
+            grupoCartel.alpha = k;
+            cartel.localScale = Vector3.one * Mathf.Lerp(0.6f, 1f, 1f - (1f - k) * (1f - k));
+            yield return null;
+        }
+        grupoCartel.alpha = 1f; cartel.localScale = Vector3.one;
+        // se queda 3 s (clic o espacio lo pasa antes)
+        float hasta = Time.unscaledTime + 3f;
+        while (Time.unscaledTime < hasta && !Input.GetMouseButtonDown(0) && !Input.GetKeyDown(KeyCode.Space)) yield return null;
+        for (float t = 0f; t < 0.3f; t += Time.unscaledDeltaTime) { grupoCartel.alpha = 1f - t / 0.3f; yield return null; }
+        cartel.gameObject.SetActive(false);
     }
 
     static IEnumerator WaitReal(float s) { float f = Time.unscaledTime + s; while (Time.unscaledTime < f) yield return null; }
